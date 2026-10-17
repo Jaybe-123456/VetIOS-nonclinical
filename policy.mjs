@@ -8,7 +8,9 @@ export const ROUTES = Object.freeze({
     '/assets/site.css': 'assets/site.css', '/assets/demo.js': 'assets/demo.js', '/release.json': 'release.json',
 });
 export const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; worker-src 'none'; manifest-src 'none'";
+export const RELEASE_ORIGIN_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 export const HEADERS = Object.freeze({
+    'cache-control': 'no-store',
     'content-security-policy': CSP, 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer', 'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=()',
     'strict-transport-security': 'max-age=31536000', 'cross-origin-resource-policy': 'same-origin',

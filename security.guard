@@ -23,6 +23,14 @@ rule role_boundary {
   Resources.Publisher.Properties.PermissionsBoundary exists
   Resources.Publisher.Properties.AssumeRolePolicyDocument.Statement[0].Action == 'sts:AssumeRoleWithWebIdentity'
 }
+rule release_cache_separation {
+  Resources.Headers.Properties.ResponseHeadersPolicyConfig.CustomHeadersConfig.Items[0].Header == 'cache-control'
+  Resources.Headers.Properties.ResponseHeadersPolicyConfig.CustomHeadersConfig.Items[0].Value == 'no-store'
+  Resources.Headers.Properties.ResponseHeadersPolicyConfig.CustomHeadersConfig.Items[0].Override == true
+  Resources.Cache.Properties.CachePolicyConfig.DefaultTTL == 0
+  Resources.Cache.Properties.CachePolicyConfig.MinTTL == 0
+  Resources.Cache.Properties.CachePolicyConfig.MaxTTL == 31536000
+}
 rule no_clinical_resources {
   Resources.*.Type NOT IN ['AWS::Lambda::Function','AWS::ApiGateway::RestApi','AWS::ApiGatewayV2::Api','AWS::EC2::Instance','AWS::ECS::Service','AWS::RDS::DBInstance','AWS::DynamoDB::Table','AWS::SecretsManager::Secret']
 }

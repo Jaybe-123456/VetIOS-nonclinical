@@ -117,8 +117,10 @@ export async function infrastructureAuthorization(c,aws,artifact,authorization,n
     assert.equal(sha256(await aws.guard(c.guard_function_arn)),sha256(edgeCode()));
     const header=(await aws.call('cloudfront','get-response-headers-policy',{Id:c.headers_policy_id})).ResponseHeadersPolicy.ResponseHeadersPolicyConfig;
     assert.equal(header.SecurityHeadersConfig.ContentSecurityPolicy.ContentSecurityPolicy,HEADERS['content-security-policy']);assert.equal(header.SecurityHeadersConfig.ContentSecurityPolicy.Override,true);
+    const viewerCache=header.CustomHeadersConfig?.Items?.filter(h=>h.Header.toLowerCase()==='cache-control');
+    assert.equal(viewerCache?.length,1,'exactly one viewer cache policy required');assert.equal(viewerCache[0].Value,HEADERS['cache-control']);assert.equal(viewerCache[0].Override,true);
     const cache=(await aws.call('cloudfront','get-cache-policy',{Id:c.cache_policy_id})).CachePolicy.CachePolicyConfig;
-    assert.equal(cache.MinTTL,0);const p=cache.ParametersInCacheKeyAndForwardedToOrigin;assert.equal(p.CookiesConfig.CookieBehavior,'none');assert.equal(p.HeadersConfig.HeaderBehavior,'none');assert.equal(p.QueryStringsConfig.QueryStringBehavior,'none');
+    assert.equal(cache.DefaultTTL,0);assert.equal(cache.MinTTL,0);assert.equal(cache.MaxTTL,31536000);const p=cache.ParametersInCacheKeyAndForwardedToOrigin;assert.equal(p.CookiesConfig.CookieBehavior,'none');assert.equal(p.HeadersConfig.HeaderBehavior,'none');assert.equal(p.QueryStringsConfig.QueryStringBehavior,'none');
     // The approved bootstrap record binds every returned infrastructure property, not just selected fields.
     assert.equal(records.bootstrap_record_sha256.distribution_config_sha256,sha256(canonical(d)));
     assert.equal(records.bootstrap_record_sha256.headers_config_sha256,sha256(canonical(header)));assert.equal(records.bootstrap_record_sha256.cache_config_sha256,sha256(canonical(cache)));

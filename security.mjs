@@ -28,7 +28,10 @@ const badStack=path.join(directory,'adverse-public-bucket.json');await fs.writeF
 checks.guard_adverse=await run('guard-adverse',process.env.CFN_GUARD,['validate','--rules',path.join(ROOT,'security.guard'),'--data',badStack,'--show-summary','all'],{fails:true});assert.match(await fs.readFile(path.join(directory,'guard-adverse.log'),'utf8'),/FAIL/);
 for(const [name,mutate]of [
     ['retention-mode',t=>{t.Resources.Audit.Properties.ObjectLockConfiguration.Rule.DefaultRetention.Mode='COMPLIANCE';}],
-    ['retention-bypass',t=>{t.Resources.PublisherBoundary.Properties.PolicyDocument.Statement=t.Resources.PublisherBoundary.Properties.PolicyDocument.Statement.filter(s=>s.Sid!=='DenyEvidenceDestruction');}]
+    ['retention-bypass',t=>{t.Resources.PublisherBoundary.Properties.PolicyDocument.Statement=t.Resources.PublisherBoundary.Properties.PolicyDocument.Statement.filter(s=>s.Sid!=='DenyEvidenceDestruction');}],
+    ['viewer-cache-missing',t=>{delete t.Resources.Headers.Properties.ResponseHeadersPolicyConfig.CustomHeadersConfig;}],
+    ['viewer-cache-override',t=>{t.Resources.Headers.Properties.ResponseHeadersPolicyConfig.CustomHeadersConfig.Items[0].Override=false;}],
+    ['minimum-cache-ttl',t=>{t.Resources.Cache.Properties.CachePolicyConfig.MinTTL=60;}]
 ]){const changed=template();mutate(changed);const file=path.join(directory,'adverse-'+name+'.json');await fs.writeFile(file,JSON.stringify(changed));checks['guard_'+name]=await run('guard-'+name,process.env.CFN_GUARD,['validate','--rules',path.join(ROOT,'security.guard'),'--data',file,'--show-summary','all'],{fails:true});}
 const fresh=path.join(directory,'source-export');await exportSource(fresh);
 for(const [name,target]of [['source',fresh],['public',path.join(artifactDir,'public')]]){
