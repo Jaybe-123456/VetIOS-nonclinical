@@ -1,0 +1,37 @@
+let buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+rule private_buckets {
+  %buckets.Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
+  %buckets.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
+  %buckets.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true
+  %buckets.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true
+  %buckets.Properties.BucketEncryption exists
+  %buckets.Properties.VersioningConfiguration.Status == 'Enabled'
+  %buckets.DeletionPolicy == 'Retain'
+  %buckets.UpdateReplacePolicy == 'Retain'
+}
+rule static_distribution {
+  Resources.Distribution.Properties.DistributionConfig.DefaultCacheBehavior.AllowedMethods == ['GET','HEAD']
+  Resources.Distribution.Properties.DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy == 'https-only'
+  Resources.Distribution.Properties.DistributionConfig.CacheBehaviors !exists
+  Resources.Distribution.Properties.DistributionConfig.OriginGroups !exists
+  Resources.Distribution.Properties.DistributionConfig.Aliases !exists
+  Resources.Distribution.Properties.DistributionConfig.DefaultCacheBehavior.LambdaFunctionAssociations !exists
+  Resources.Distribution.Properties.DistributionConfig.DefaultCacheBehavior.FunctionAssociations exists
+  Resources.Distribution.Properties.DistributionConfig.DefaultCacheBehavior.ResponseHeadersPolicyId exists
+}
+rule role_boundary {
+  Resources.Publisher.Properties.PermissionsBoundary exists
+  Resources.Publisher.Properties.AssumeRolePolicyDocument.Statement[0].Action == 'sts:AssumeRoleWithWebIdentity'
+}
+rule no_clinical_resources {
+  Resources.*.Type NOT IN ['AWS::Lambda::Function','AWS::ApiGateway::RestApi','AWS::ApiGatewayV2::Api','AWS::EC2::Instance','AWS::ECS::Service','AWS::RDS::DBInstance','AWS::DynamoDB::Table','AWS::SecretsManager::Secret']
+}
+
+rule audit_governance_retention {
+  Resources.Audit.Properties.ObjectLockConfiguration.ObjectLockEnabled == 'Enabled'
+  Resources.Audit.Properties.ObjectLockConfiguration.Rule.DefaultRetention.Mode == 'GOVERNANCE'
+  Resources.Audit.Properties.ObjectLockConfiguration.Rule.DefaultRetention.Days == 30
+  Resources.PublisherBoundary.Properties.PolicyDocument.Statement[0].Sid == 'DenyEvidenceDestruction'
+  Resources.PublisherBoundary.Properties.PolicyDocument.Statement[0].Effect == 'Deny'
+  Resources.PublisherBoundary.Properties.PolicyDocument.Statement[0].Action == ['s3:BypassGovernanceRetention','s3:PutObjectRetention','s3:PutObjectLegalHold','s3:DeleteObject','s3:DeleteObjectVersion']
+}

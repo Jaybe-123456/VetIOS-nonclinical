@@ -1,0 +1,23 @@
+name: Non-clinical public health
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-health:
+    if: github.repository != 'Karshadev/VetIOS' && github.repository_id != '1161119818'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      NONCLINICAL_MONITOR_DOMAIN: ${{ vars.NONCLINICAL_MONITOR_DOMAIN }}
+      NONCLINICAL_MONITOR_MANIFEST: ${{ vars.NONCLINICAL_MONITOR_MANIFEST }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.20.0
+      - run: node monitor.mjs

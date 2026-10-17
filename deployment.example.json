@@ -1,0 +1,23 @@
+{
+  "schema": "vetios-nonclinical-deployment-v2",
+  "status": "NOT_COMMISSIONED",
+  "project_id": "845081398643",
+  "region": "eu-north-1",
+  "repository": null,
+  "repository_id": null,
+  "human_deployer_ids": [],
+  "content_bucket": null,
+  "audit_bucket": null,
+  "kvs_arn": null,
+  "distribution_id": null,
+  "domain": null,
+  "publisher_role_arn": null,
+  "guard_function_arn": null,
+  "headers_policy_id": null,
+  "cache_policy_id": null,
+  "monitoring_owner": null,
+  "security_review_record_sha256": null,
+  "bootstrap_record_sha256": null,
+  "content_privacy_approval_sha256": null,
+  "publication_approval_sha256": null
+}

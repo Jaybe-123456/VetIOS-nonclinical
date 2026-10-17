@@ -1,0 +1,112 @@
+name: Isolated non-clinical candidate
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [prepare, suspend, publish, rollback]
+        default: prepare
+      artifact_sha256:
+        description: Exact artifact digest reviewed by the human deployer
+        type: string
+      prior_healthy_receipt:
+        description: Rollback only - prior immutable audit/<run>-<attempt>/outcome.json
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: nonclinical-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  qualify:
+    if: github.repository != 'Karshadev/VetIOS' && github.repository_id != '1161119818'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.20.0
+      - run: npm ci --ignore-scripts
+      - run: npx --no-install playwright install --with-deps chromium
+      - name: Execute contracts and real desktop/mobile browser checks
+        run: node verify.mjs "$RUNNER_TEMP/qualified"
+      - name: Install isolated pinned validation tools
+        run: |
+          python3 -m venv "$RUNNER_TEMP/validators"
+          "$RUNNER_TEMP/validators/bin/pip" install --disable-pip-version-check cfn-lint==1.57.2
+          curl --fail --silent --show-error --location --proto '=https' --output "$RUNNER_TEMP/guard.tar.gz" https://github.com/aws-cloudformation/cloudformation-guard/releases/download/3.2.1/cfn-guard-v3-x86_64-linux-latest.tar.gz
+          printf '%s\n' "8c66efb19c63e6c2bf26b9a41bbcf2f85baa8a937b01d350940194faaf64cf1d  $RUNNER_TEMP/guard.tar.gz" | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/guard.tar.gz" --directory "$RUNNER_TEMP/validators"
+          curl --fail --silent --show-error --location --proto '=https' --output "$RUNNER_TEMP/gitleaks.tar.gz" https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          printf '%s\n' "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" --directory "$RUNNER_TEMP/validators" gitleaks
+      - name: Validate infrastructure and scan the fresh export and public artifact
+        env:
+          CFN_LINT: ${{ runner.temp }}/validators/bin/cfn-lint
+          CFN_GUARD: ${{ runner.temp }}/validators/cfn-guard-v3-x86_64-linux-latest/cfn-guard
+          GITLEAKS: ${{ runner.temp }}/validators/gitleaks
+        run: node security.mjs "$RUNNER_TEMP/security" "$RUNNER_TEMP/qualified/candidate"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: nonclinical-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/qualified
+            ${{ runner.temp }}/security
+          if-no-files-found: error
+          retention-days: 30
+  publish:
+    needs: qualify
+    if: github.event_name == 'workflow_dispatch' && inputs.mode != 'prepare' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: vetios-nonclinical-production
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      GH_READ_TOKEN: ${{ secrets.NONCLINICAL_SECURITY_READ_TOKEN }}
+      NONCLINICAL_DEPLOYMENT_CONFIG: ${{ vars.NONCLINICAL_DEPLOYMENT_CONFIG }}
+      EXPECTED_ARTIFACT: ${{ inputs.artifact_sha256 }}
+      RELEASE_MODE: ${{ inputs.mode }}
+      PRIOR_HEALTHY_RECEIPT: ${{ inputs.prior_healthy_receipt }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.20.0
+      - name: Materialize protected configuration and verify live human authorization before AWS access
+        run: |
+          node --input-type=module -e 'import fs from "node:fs"; import {validateConfig} from "./deploy.mjs"; const c=validateConfig(JSON.parse(process.env.NONCLINICAL_DEPLOYMENT_CONFIG)); fs.writeFileSync(process.env.RUNNER_TEMP+"/deployment.json",JSON.stringify(c),{flag:"wx",mode:0o600}); fs.appendFileSync(process.env.GITHUB_ENV,"NONCLINICAL_ROLE="+c.publisher_role_arn+"\n");'
+          node deploy.mjs github-preflight "$RUNNER_TEMP/deployment.json"
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: nonclinical-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/evidence
+      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
+        with:
+          role-to-assume: ${{ env.NONCLINICAL_ROLE }}
+          aws-region: eu-north-1
+          role-duration-seconds: 900
+          role-session-name: nonclinical-${{ github.run_id }}-${{ github.run_attempt }}
+          allowed-account-ids: '845081398643'
+          mask-aws-account-id: true
+          retry-max-attempts: 1
+          unset-current-credentials: true
+      - name: Retrieve an immutable prior artifact only for an explicitly approved rollback
+        if: inputs.mode == 'rollback'
+        run: node deploy.mjs fetch-rollback "$RUNNER_TEMP/deployment.json" "$RUNNER_TEMP/rollback" "$EXPECTED_ARTIFACT" "$PRIOR_HEALTHY_RECEIPT"
+      - name: Publish exact approved static bytes or roll back to a prior healthy artifact
+        run: |
+          DIRECTORY="$RUNNER_TEMP/evidence/qualified/candidate"
+          if [ "$RELEASE_MODE" = rollback ]; then DIRECTORY="$RUNNER_TEMP/rollback"; fi
+          node deploy.mjs "$RELEASE_MODE" "$RUNNER_TEMP/deployment.json" "$DIRECTORY" "$EXPECTED_ARTIFACT" "$PRIOR_HEALTHY_RECEIPT"
