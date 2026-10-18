@@ -18,6 +18,8 @@ export const HEADERS = Object.freeze({
 });
 export const PARENT_REPOSITORY = 'Karshadev/VetIOS';
 export const PARENT_REPOSITORY_ID = 1161119818;
+// Owner-supplied public identity is required; no AI assessment may fill this value.
+export const PUBLIC_OPERATOR_NAME = null;
 export const shaPattern = /^[a-f0-9]{64}$/;
 export const canonical = value => JSON.stringify(sort(value));
 function sort(value) { return Array.isArray(value) ? value.map(sort) : value && typeof value === 'object'

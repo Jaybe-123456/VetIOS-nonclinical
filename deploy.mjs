@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
-import { canonical,GOVERNANCE,HEADERS,PARENT_REPOSITORY,PARENT_REPOSITORY_ID,ROUTES,shaPattern } from './policy.mjs';
+import { canonical,GOVERNANCE,HEADERS,PARENT_REPOSITORY,PARENT_REPOSITORY_ID,ROUTES,shaPattern,PUBLIC_OPERATOR_NAME } from './policy.mjs';
 import { ROOT,readSource,sha256 } from './build.mjs';
 import { edgeCode } from './edge.mjs';
 import { CONTENT_TYPES } from './serve.mjs';
@@ -75,6 +75,34 @@ export async function humanAuthorization(c,env=process.env,get=githubGet) {
     const review=reviews.find(r=>r.state==='approved'&&r.environments.some(e=>e.name===ENVIRONMENT)&&r.user.type==='User'&&c.human_deployer_ids.includes(r.user.id));assert.ok(review,'actual human environment approval required');
     return {run_id:env.GITHUB_RUN_ID,attempt:env.GITHUB_RUN_ATTEMPT,source_commit:env.GITHUB_SHA,approver_id:review.user.id,repository_id:c.repository_id};
 }
+export function validateContentPrivacyReview(record,c,artifact,{publicOperatorName=PUBLIC_OPERATOR_NAME,now=Date.now()}={}) {
+    assert.equal(record.status,'APPROVED');assert.ok(c.human_deployer_ids.includes(record.approver_id),'allowed actual human owner required');
+    const review=record.content_review;
+    assert.ok(review&&typeof review==='object'&&!Array.isArray(review),'actual human content/privacy review and ownership details required');
+    const fields=['schema','disposition','reviewer_type','operator_name','public_contact','inbox_owner_name','inbox_owner_role','inbox_verification_method','inbox_verified_at','incident_owner_name','incident_owner_role','operational_ownership','notification_email','notification_verification_method','notification_route_tested_at','response_availability','email_provider','email_retention_policy','provider_processing_disposition','artifact_sha256','boundary_sha256'];
+    assert.deepEqual(Object.keys(review).sort(),fields.sort(),'closed human content review required');
+    assert.equal(review.schema,'vetios-nonclinical-content-review-v2');
+    assert.equal(review.disposition,'APPROVED');assert.equal(review.reviewer_type,'HUMAN_OWNER','AI assessment cannot establish human approval');
+    const text=value=>assert.ok(typeof value==='string'&&value.trim()===value&&value.length>=3&&value.length<=500&&!/^(?:unknown|unassigned|pending|tbd|todo|not[_ -]established|null|none)$/i.test(value),'concrete owner-supplied facts required');
+    for(const key of ['operator_name','inbox_owner_name','inbox_owner_role','incident_owner_name','incident_owner_role','response_availability','email_provider','email_retention_policy'])text(review[key]);
+    assert.ok(typeof publicOperatorName==='string'&&publicOperatorName.trim().length>=3,'public operator details are required before publication');
+    assert.equal(review.operator_name,publicOperatorName,'review must match the public operator identity');
+    assert.equal(review.public_contact,'platform@vetios.tech');
+    assert.equal(review.inbox_verification_method,'OWNER_ATTESTED_ACTIVE_INBOX');
+    assert.ok(Number.isFinite(Date.parse(review.inbox_verified_at))&&Date.parse(review.inbox_verified_at)<=now,'actual prior inbox attestation required');
+    assert.ok(now-Date.parse(review.inbox_verified_at)<=30*86400000,'inbox attestation older than 30 days');
+    assert.equal(review.incident_owner_name,c.monitoring_owner,'incident owner must match commissioned monitoring owner');
+    assert.equal(review.operational_ownership,'ACCEPTED_BY_NAMED_HUMAN','proposed responsibility is not accepted ownership');
+    assert.equal(review.notification_email,review.public_contact,'only the reviewed operational inbox may receive notifications');
+    assert.equal(review.notification_verification_method,'OWNER_ATTESTED_DELIVERY_AND_ALERT_ROUTING');
+    const notificationTest=Date.parse(review.notification_route_tested_at);
+    assert.ok(Number.isFinite(notificationTest)&&notificationTest<=now&&now-notificationTest<=30*86400000,'recent completed notification delivery and routing test required');
+    assert.equal(review.provider_processing_disposition,'REVIEWED_AWS_GLOBAL_DELIVERY_AND_PROVIDER_METADATA');
+    assert.match(artifact.artifact_sha256,shaPattern);assert.equal(review.artifact_sha256,artifact.artifact_sha256);
+    const boundary=artifact.members?.find(m=>m.path==='boundary/index.html');assert.ok(boundary,'exact reviewed privacy page required');
+    assert.match(boundary.sha256,shaPattern);assert.equal(review.boundary_sha256,boundary.sha256);
+    return review;
+}
 export async function infrastructureAuthorization(c,aws,artifact,authorization,now=Date.now()) {
     const identity=await aws.call('sts','get-caller-identity');assert.equal(identity.Account,c.project_id);
     assert.ok(identity.Arn.startsWith('arn:aws:sts::'+c.project_id+':assumed-role/'+c.publisher_role_arn.split('/').at(-1)+'/'));
@@ -105,6 +133,8 @@ export async function infrastructureAuthorization(c,aws,artifact,authorization,n
     assert.equal(retention.ObjectLockEnabled,'Enabled');assert.equal(retention.Rule.DefaultRetention.Mode,'GOVERNANCE');assert.equal(retention.Rule.DefaultRetention.Days,30);
     const distribution=(await aws.call('cloudfront','get-distribution',{Id:c.distribution_id})).Distribution;
     assert.equal(distribution.DomainName,c.domain);assert.equal(distribution.Status,'Deployed');const d=distribution.DistributionConfig;
+    assert.equal(d.Logging?.Enabled??false,false,'website access logging requires a newly reviewed privacy disposition');
+    assert.equal(d.DefaultCacheBehavior.RealtimeLogConfigArn,undefined,'real-time viewer logging is outside the reviewed scope');
     assert.equal(d.Enabled,true);assert.equal(d.Origins.Quantity,1);assert.equal(d.Origins.Items[0].DomainName,c.content_bucket+'.s3.eu-north-1.amazonaws.com');
     assert.ok(d.Origins.Items[0].OriginAccessControlId);assert.ok(d.Origins.Items[0].S3OriginConfig);assert.equal(d.Origins.Items[0].CustomOriginConfig,undefined);
     for(const key of ['Aliases','CacheBehaviors','OriginGroups'])assert.equal(d[key]?.Quantity??0,0);
@@ -124,6 +154,7 @@ export async function infrastructureAuthorization(c,aws,artifact,authorization,n
     // The approved bootstrap record binds every returned infrastructure property, not just selected fields.
     assert.equal(records.bootstrap_record_sha256.distribution_config_sha256,sha256(canonical(d)));
     assert.equal(records.bootstrap_record_sha256.headers_config_sha256,sha256(canonical(header)));assert.equal(records.bootstrap_record_sha256.cache_config_sha256,sha256(canonical(cache)));
+    validateContentPrivacyReview(records.content_privacy_approval_sha256,c,artifact,{now});
     return {authorization,config_sha256:configHash,records:Object.values(records).map(r=>r.kind)};
 }
 export async function health(c,artifact,request=fetch) {
