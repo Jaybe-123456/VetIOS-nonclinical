@@ -8,7 +8,9 @@ export const ROUTES = Object.freeze({
     '/assets/site.css': 'assets/site.css', '/assets/demo.js': 'assets/demo.js', '/release.json': 'release.json',
 });
 export const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; worker-src 'none'; manifest-src 'none'";
+export const RELEASE_ORIGIN_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 export const HEADERS = Object.freeze({
+    'cache-control': 'no-store',
     'content-security-policy': CSP, 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer', 'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=()',
     'strict-transport-security': 'max-age=31536000', 'cross-origin-resource-policy': 'same-origin',
@@ -16,6 +18,8 @@ export const HEADERS = Object.freeze({
 });
 export const PARENT_REPOSITORY = 'Karshadev/VetIOS';
 export const PARENT_REPOSITORY_ID = 1161119818;
+// Owner-supplied public identity is required; no AI assessment may fill this value.
+export const PUBLIC_OPERATOR_NAME = null;
 export const shaPattern = /^[a-f0-9]{64}$/;
 export const canonical = value => JSON.stringify(sort(value));
 function sort(value) { return Array.isArray(value) ? value.map(sort) : value && typeof value === 'object'

@@ -1,4 +1,5 @@
-import { GOVERNANCE } from './policy.mjs';
+import { GOVERNANCE, PUBLIC_OPERATOR_NAME } from './policy.mjs';
+export const escapeText = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
 const navigation = '<nav aria-label="Main navigation"><a href="/docs/">Public docs</a><a href="/demo/">Synthetic demo</a><a href="/boundary/">Release boundary</a></nav>';
 export function page(title, body, script = false) {
@@ -50,7 +51,12 @@ ${['objective','evidence','action','outcome','verification','learning'].map(key 
 <p class="lead">This site is independently isolated from the governed clinical application. Its deployment cannot accept patient data, infer a diagnosis, update an outcome model or join a live federation.</p>
 <div class="status-grid">${Object.entries(GOVERNANCE).map(([key,value]) => `<div class="status"><span>${key.replaceAll('_',' ')}</span><strong>${value}</strong></div>`).join('')}</div>
 <table class="rule-table"><thead><tr><th>INCLUDED</th><th>EXCLUDED FROM THIS DEPLOYMENT</th></tr></thead><tbody><tr><td>Static public website and architecture docs</td><td>Clinical inference APIs, patient records and uploads</td></tr><tr><td>Fixed synthetic laboratory-control traces</td><td>Outcome-learning jobs, model promotion and federation</td></tr><tr><td>Non-clinical publication, monitoring and rollback</td><td>Clinical credentials, tenant administration and governed runner access</td></tr></tbody></table>
-<div class="prose"><h2>Privacy</h2><p>This candidate provides no accounts, forms, cookies, local storage, analytics integrations or patient-data input. Hosting providers necessarily process network requests and their operational metadata. Final public privacy/contact information, retention settings and notification ownership must be reviewed before publication.</p>
+<div class="prose"><h2>Privacy and operator</h2><p data-public-operator>Site operator: ${escapeText(PUBLIC_OPERATOR_NAME ?? 'Not yet confirmed by the legitimate owner. This candidate is not authorized for publication.')}</p>
+<p>This static site has no accounts, forms, cookies, browser storage, analytics integrations or patient-data input. The synthetic demonstration changes only a fixed local display.</p>
+<h3>Hosting and request metadata</h3><p>Amazon Web Services (AWS) provides the proposed hosting. Delivery requires processing network metadata such as an IP address, requested path, request time and browser headers to serve and protect requests. The static origin is in Stockholm; CloudFront uses a global edge network. Stockholm origin storage is not a promise that all provider processing stays in Stockholm.</p>
+<p>The proposed release configuration adds no website access-log or analytics collection. That does not mean AWS processes or retains no operational or security metadata. The applicable AWS terms and the operator's provider-processing review govern that handling; no universal deletion period is promised here.</p>
+<h3>Contact messages and ownership</h3><p>Email is separate from this site. Sending a message supplies the sender's address and message to the mailbox operator and email provider. The legitimate owner must identify the operator, confirm the active inbox, review email-provider handling and retention, and assign incident responsibility before publication. Those facts are not established by this candidate.</p>
+<h2>Contact</h2><p>For platform and privacy inquiries, contact <a href="mailto:platform@vetios.tech">platform@vetios.tech</a>. Do not send patient records or other sensitive information by email.</p>
 <h2>Approval means one scope</h2><p>Human authorization to publish these static materials grants no independent reviewer appointment or clinical approval. Existing clinical production gates stay enforced. Do not use this site to submit clinical or other sensitive data.</p>
 <h2>Evidence limits</h2><p>Demonstration traces and engineering tests establish software behavior only. Clinical authority, commissioning and validated clinical performance are not established.</p></div></section>`),
 };

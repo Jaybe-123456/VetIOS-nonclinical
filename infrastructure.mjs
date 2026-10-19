@@ -25,8 +25,8 @@ export function template() {
     resource('Headers','AWS::CloudFront::ResponseHeadersPolicy',{ResponseHeadersPolicyConfig:{Name:sub('${AWS::StackName}-nonclinical-headers'),
         SecurityHeadersConfig:{ContentSecurityPolicy:{ContentSecurityPolicy:CSP,Override:true},ContentTypeOptions:{Override:true},FrameOptions:{FrameOption:'DENY',Override:true},
             ReferrerPolicy:{ReferrerPolicy:'no-referrer',Override:true},StrictTransportSecurity:{AccessControlMaxAgeSec:31536000,Override:true}},
-        CustomHeadersConfig:{Items:Object.entries(HEADERS).filter(([key])=>['permissions-policy','cross-origin-resource-policy','cross-origin-opener-policy'].includes(key)).map(([Header,Value])=>({Header,Value,Override:true}))}}},
-        'Response headers apply independently of client JavaScript and content.', ['No outbound connections or forms','No framing or browser sensors']);
+        CustomHeadersConfig:{Items:Object.entries(HEADERS).filter(([key])=>['cache-control','permissions-policy','cross-origin-resource-policy','cross-origin-opener-policy'].includes(key)).map(([Header,Value])=>({Header,Value,Override:true}))}}},
+        'Viewer responses stay no-store while digest-prefixed origin objects can be cached independently.', ['No browser reuse across pointer changes','No outbound connections, forms, framing or browser sensors']);
     resource('Cache','AWS::CloudFront::CachePolicy',{CachePolicyConfig:{Name:sub('${AWS::StackName}-nonclinical-cache'),DefaultTTL:0,MinTTL:0,MaxTTL:31536000,
         ParametersInCacheKeyAndForwardedToOrigin:{EnableAcceptEncodingGzip:true,EnableAcceptEncodingBrotli:true,CookiesConfig:{CookieBehavior:'none'},HeadersConfig:{HeaderBehavior:'none'},QueryStringsConfig:{QueryStringBehavior:'none'}}}},
         'Digest-prefixed immutable paths isolate versions; no cookies/query/authorization reach S3.', ['Do not forward clinical sessions']);

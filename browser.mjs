@@ -30,7 +30,15 @@ export async function browserCheck(directory,artifact,output) {
                     assert.equal(await page.getByRole('button',{name:'3 · Follow-up linked',exact:true}).getAttribute('aria-pressed'),'true');
                     checks.push(name+':fixed_local_trace_and_abstention');
                 }
-                if(route==='/boundary/')for(const text of ['NOT_ESTABLISHED','INCOMPLETE','BLOCKED'])assert.ok(await page.getByText(text,{exact:true}).count()>0);
+                if(route==='/boundary/'){
+                    for(const text of ['NOT_ESTABLISHED','INCOMPLETE','BLOCKED'])assert.ok(await page.getByText(text,{exact:true}).count()>0);
+                    assert.match(await page.locator('[data-public-operator]').textContent(),/not authorized for publication/);
+                    assert.ok(await page.getByRole('heading',{name:'Hosting and request metadata',exact:true}).isVisible());
+                    assert.match(await page.locator('.prose').textContent(),/global edge network/);
+                    assert.match(await page.locator('.prose').textContent(),/no universal deletion period/);
+                    assert.match(await page.locator('.prose').textContent(),/email provider/);
+                    checks.push(name+':visible_privacy_scope_and_unresolved_owner');
+                }
                 const file=`${name}-${route==='/'?'home':route.split('/')[1]}.png`;
                 await page.screenshot({path:path.join(output,file),fullPage:true});captures.push(file);checks.push(name+':'+route);
             }

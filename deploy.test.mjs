@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { readFileSync,statSync } from 'node:fs';
+import { awsClient } from './aws.mjs';
 import { validateConfig,humanAuthorization,publish,health } from './deploy.mjs';
 import { build } from './build.mjs';
-import { HEADERS,ROUTES } from './policy.mjs';
+import { HEADERS,ROUTES,RELEASE_ORIGIN_CACHE_CONTROL } from './policy.mjs';
 const config={schema:'vetios-nonclinical-deployment-v2',status:'COMMISSIONED_NONCLINICAL',project_id:'845081398643',region:'eu-north-1',repository:'authored-fixture/public',repository_id:123,human_deployer_ids:[456],content_bucket:'vetios-nonclinical-fixture-content',audit_bucket:'vetios-nonclinical-fixture-audit',kvs_arn:'arn:aws:cloudfront::845081398643:key-value-store/authored',distribution_id:'AUTHORED123',domain:'dauthored123.cloudfront.net',publisher_role_arn:'arn:aws:iam::845081398643:role/authored',guard_function_arn:'arn:aws:cloudfront::845081398643:function/authored',headers_policy_id:'authored-headers',cache_policy_id:'authored-cache',monitoring_owner:'fixture only',security_review_record_sha256:'a'.repeat(64),bootstrap_record_sha256:'b'.repeat(64),content_privacy_approval_sha256:'c'.repeat(64),publication_approval_sha256:null};
 for(const [key,value]of [['status','NOT_COMMISSIONED'],['project_id','679583587696'],['region','us-east-1'],['repository','Karshadev/VetIOS'],['repository_id',1161119818],['content_bucket','clinical-storage'],['domain','clinical.example'],['human_deployer_ids',[]],['bootstrap_record_sha256',null]])test('configuration rejects '+key,()=>assert.throws(()=>validateConfig({...config,[key]:value})));
 test('unknown configuration credentials cannot enter',()=>assert.throws(()=>validateConfig({...config,secret:'AUTHORED'})));
@@ -60,7 +62,7 @@ test('a new intent cannot reuse an already audited attempt',()=>candidate(async(
 }));
 
 // Authored provider responses test mechanics only; no executed human authority is produced.
-import { infrastructureAuthorization } from './deploy.mjs';
+import { infrastructureAuthorization,validateContentPrivacyReview } from './deploy.mjs';
 import { canonical } from './policy.mjs';
 import { readSource,sha256 } from './build.mjs';
 import { edgeCode } from './edge.mjs';
@@ -68,13 +70,24 @@ async function commissionedFixture(change={}){
     const c={...config},source=(await readSource()).sha256;
     const d={Enabled:true,Origins:{Quantity:1,Items:[{Id:'fixed',DomainName:c.content_bucket+'.s3.eu-north-1.amazonaws.com',OriginAccessControlId:'authored-oac',S3OriginConfig:{OriginAccessIdentity:''}}]},
         Aliases:{Quantity:0},CacheBehaviors:{Quantity:0},OriginGroups:{Quantity:0},DefaultCacheBehavior:{TargetOriginId:'fixed',ViewerProtocolPolicy:'https-only',AllowedMethods:{Items:['GET','HEAD']},LambdaFunctionAssociations:{Quantity:0},FunctionAssociations:{Quantity:1,Items:[{EventType:'viewer-request',FunctionARN:c.guard_function_arn}]},ResponseHeadersPolicyId:c.headers_policy_id,CachePolicyId:c.cache_policy_id}};
-    const headers={SecurityHeadersConfig:{ContentSecurityPolicy:{ContentSecurityPolicy:HEADERS['content-security-policy'],Override:true}}};
-    const cache={MinTTL:0,ParametersInCacheKeyAndForwardedToOrigin:{CookiesConfig:{CookieBehavior:'none'},HeadersConfig:{HeaderBehavior:'none'},QueryStringsConfig:{QueryStringBehavior:'none'}}};
+    const headers={SecurityHeadersConfig:{ContentSecurityPolicy:{ContentSecurityPolicy:HEADERS['content-security-policy'],Override:true}},CustomHeadersConfig:{Items:[{Header:'cache-control',Value:'no-store',Override:true}]}};
+    const cache={DefaultTTL:0,MinTTL:0,MaxTTL:31536000,ParametersInCacheKeyAndForwardedToOrigin:{CookiesConfig:{CookieBehavior:'none'},HeadersConfig:{HeaderBehavior:'none'},QueryStringsConfig:{QueryStringBehavior:'none'}}};
+    // Rebind authored records to each adverse configuration: explicit policy must still reject it.
+    if(change.viewerCacheMissing)delete headers.CustomHeadersConfig;
+    if(change.viewerCacheMutable)headers.CustomHeadersConfig.Items[0].Value='public, max-age=3600';
+    if(change.viewerCacheNoOverride)headers.CustomHeadersConfig.Items[0].Override=false;
+    if(change.viewerCacheDuplicate)headers.CustomHeadersConfig.Items.push({Header:'Cache-Control',Value:'no-store',Override:true});
+    if(change.defaultTTL)cache.DefaultTTL=3600;
+    if(change.minTTL)cache.MinTTL=3600;
+    if(change.maxTTL)cache.MaxTTL=63072000;
+    if(change.viewerLogging)d.Logging={Enabled:true,Bucket:'authored-viewer-logs.s3.amazonaws.com',Prefix:'viewers/',IncludeCookies:false};
+    if(change.realtimeLogging)d.DefaultCacheBehavior.RealtimeLogConfigArn='arn:aws:cloudfront::845081398643:realtime-log-config/authored';
     const bucketPolicy=bucket=>{const arn='arn:aws:s3:::'+bucket;const statements=[{Sid:'DenyInsecureTransport',Effect:'Deny',Principal:'*',Action:'s3:*',Resource:[arn,arn+'/*'],Condition:{Bool:{'aws:SecureTransport':'false'}}},{Sid:'RequireConditionalWrites',Effect:'Deny',Principal:'*',Action:'s3:PutObject',Resource:arn+'/*',Condition:{Null:{'s3:if-none-match':'true'}}}];if(bucket===c.content_bucket)statements.push({Sid:'AllowOnlyThisDistributionRead',Effect:'Allow',Principal:{Service:'cloudfront.amazonaws.com'},Action:'s3:GetObject',Resource:arn+'/releases/*',Condition:{StringEquals:{'AWS:SourceArn':'arn:aws:cloudfront::'+c.project_id+':distribution/'+c.distribution_id}}});return {Version:'2012-10-17',Statement:statements};};
     const records=new Map(),configHash=sha256(canonical(Object.fromEntries(Object.entries(c).filter(([key])=>!key.endsWith('_sha256')))));
     for(const key of ['security_review_record_sha256','bootstrap_record_sha256','content_privacy_approval_sha256']){
         const record={schema:'vetios-nonclinical-commissioning-v1',kind:key,scope:'NONCLINICAL_STATIC_ONLY',config_sha256:configHash,source_sha256:change.source?'f'.repeat(64):source,approver_id:456,expires_at:change.expired?'2000-01-01T00:00:00Z':'2099-01-01T00:00:00Z',status:'APPROVED',
             distribution_config_sha256:sha256(canonical(d)),headers_config_sha256:sha256(canonical(headers)),cache_config_sha256:sha256(canonical(cache)),content_policy_sha256:sha256(canonical(bucketPolicy(c.content_bucket))),audit_policy_sha256:sha256(canonical(bucketPolicy(c.audit_bucket)))};
+        if(key==='content_privacy_approval_sha256')record.content_review=reviewFixture().record.content_review;
         const bytes=Buffer.from(canonical(record));c[key]=sha256(bytes);records.set('audit/commissioning/'+c[key]+'.json',bytes);
     }
     if(change.origin)d.Origins.Items[0].DomainName='clinical.example';
@@ -91,7 +104,38 @@ async function commissionedFixture(change={}){
             'get-response-headers-policy':{ResponseHeadersPolicy:{ResponseHeadersPolicyConfig:headers}},'get-cache-policy':{CachePolicy:{CachePolicyConfig:cache}},
         };assert.ok(op in value,service+op);return value[op];
     }};
-    return {c,aws,artifact:{source_sha256:source}};
+    return {c,aws,artifact:{source_sha256:source,artifact_sha256:'9'.repeat(64),members:[{path:'boundary/index.html',sha256:'8'.repeat(64)}]}};
 }
-test('provider readbacks and source-bound commissioning hashes compose',async()=>{const f=await commissionedFixture();assert.equal((await infrastructureAuthorization(f.c,f.aws,f.artifact,authorization)).records.length,3);});
-for(const adverse of ['expired','source','origin','guard','headers','public'])test('live preflight rejects '+adverse+' drift',async()=>{const f=await commissionedFixture({[adverse]:true});await assert.rejects(()=>infrastructureAuthorization(f.c,f.aws,f.artifact,authorization));});
+test('nominal provider readbacks cannot commission unresolved public operator identity',async()=>{const f=await commissionedFixture();await assert.rejects(()=>infrastructureAuthorization(f.c,f.aws,f.artifact,authorization),/public operator details are required/);});
+for(const adverse of ['expired','source','origin','guard','headers','public','viewerCacheMissing','viewerCacheMutable','viewerCacheNoOverride','viewerCacheDuplicate','defaultTTL','minTTL','maxTTL','viewerLogging','realtimeLogging'])test('live preflight rejects '+adverse+' drift',async()=>{const f=await commissionedFixture({[adverse]:true});await assert.rejects(()=>infrastructureAuthorization(f.c,f.aws,f.artifact,authorization),error=>{assert.doesNotMatch(error.message,/public operator details are required/,'existing infrastructure rejection must run before missing owner admission');return true;});});
+
+// Authored mechanics only. These objects are never saved as executed approval records.
+function reviewFixture(){
+    const now=Date.parse('2026-10-18T00:00:00Z');
+    const review={schema:'vetios-nonclinical-content-review-v2',disposition:'APPROVED',reviewer_type:'HUMAN_OWNER',operator_name:'Fixture Operator',public_contact:'platform@vetios.tech',inbox_owner_name:'Fixture Human',inbox_owner_role:'Operator',inbox_verification_method:'OWNER_ATTESTED_ACTIVE_INBOX',inbox_verified_at:'2026-10-17T00:00:00Z',incident_owner_name:'fixture only',incident_owner_role:'Incident owner',operational_ownership:'ACCEPTED_BY_NAMED_HUMAN',notification_email:'platform@vetios.tech',notification_verification_method:'OWNER_ATTESTED_DELIVERY_AND_ALERT_ROUTING',notification_route_tested_at:'2026-10-17T00:00:00Z',response_availability:'Authored weekday coverage',email_provider:'Authored mail service',email_retention_policy:'Authored bounded retention disposition',provider_processing_disposition:'REVIEWED_AWS_GLOBAL_DELIVERY_AND_PROVIDER_METADATA',artifact_sha256:'9'.repeat(64),boundary_sha256:'8'.repeat(64)};
+    return {record:{status:'APPROVED',approver_id:456,content_review:review},artifact:{artifact_sha256:'9'.repeat(64),members:[{path:'boundary/index.html',sha256:'8'.repeat(64)}]},options:{publicOperatorName:'Fixture Operator',now}};
+}
+test('complete authored human ownership structure validates only against its exact disclosure and artifact',()=>{const f=reviewFixture();assert.equal(validateContentPrivacyReview(f.record,config,f.artifact,f.options).operator_name,'Fixture Operator');});
+for(const field of Object.keys(reviewFixture().record.content_review))test('content review rejects omitted '+field,()=>{const f=reviewFixture();delete f.record.content_review[field];assert.throws(()=>validateContentPrivacyReview(f.record,config,f.artifact,f.options));});
+for(const [field,value]of [['disposition','CHANGES_REQUESTED'],['reviewer_type','AI'],['operator_name','Different Operator'],['inbox_owner_name','UNKNOWN'],['incident_owner_name','Different owner'],['operational_ownership','PROPOSED'],['notification_email','budget-only@example.invalid'],['notification_verification_method','NOT_TESTED'],['notification_route_tested_at','2026-10-19T00:00:00Z'],['notification_route_tested_at','2025-01-01T00:00:00Z'],['inbox_verification_method','AI_INFERRED'],['inbox_verified_at','2026-10-19T00:00:00Z'],['inbox_verified_at','2025-01-01T00:00:00Z'],['email_provider','TBD'],['email_retention_policy','PENDING'],['response_availability','UNASSIGNED'],['provider_processing_disposition','NOT_REVIEWED'],['public_contact','other@example.invalid'],['artifact_sha256','7'.repeat(64)],['boundary_sha256','7'.repeat(64)]])test('content review rejects invalid '+field+' '+value,()=>{const f=reviewFixture();f.record.content_review[field]=value;assert.throws(()=>validateContentPrivacyReview(f.record,config,f.artifact,f.options));});
+test('changes-requested outer record cannot become human approval',()=>{const f=reviewFixture();f.record.status='CHANGES_REQUESTED';assert.throws(()=>validateContentPrivacyReview(f.record,config,f.artifact,f.options));});
+test('public owner cannot be invented from an otherwise complete synthetic record',()=>{const f=reviewFixture();assert.throws(()=>validateContentPrivacyReview(f.record,config,f.artifact,{now:f.options.now}),/public operator details are required/);});
+
+test('AWS object transport caches exact immutable release members and preserves conditional encrypted writes',async()=>{
+    const calls=[],body=Buffer.from('authored transport payload');
+    const client=awsClient({run:(command,args,options)=>{
+        assert.equal(command,'aws');assert.equal(options.shell,undefined);assert.equal(options.env.AWS_MAX_ATTEMPTS,'1');
+        const input=JSON.parse(args[args.indexOf('--cli-input-json')+1]),bodyPath=args[args.indexOf('--body')+1];
+        assert.deepEqual(readFileSync(bodyPath),body);assert.equal(statSync(bodyPath).mode&0o777,0o600);
+        assert.equal(args[args.indexOf('--region')+1],'eu-north-1');calls.push(input);return {status:0,stdout:'{}'};
+    }});
+    for(const member of new Set([...Object.values(ROUTES),'artifact.json']))await client.put(config.content_bucket,'releases/'+'a'.repeat(64)+'/'+member,body);
+    assert.equal(calls.length,8);
+    for(const call of calls){assert.equal(call.CacheControl,RELEASE_ORIGIN_CACHE_CONTROL);assert.equal(call.IfNoneMatch,'*');assert.equal(call.ServerSideEncryption,'AES256');assert.equal(call.ExpectedBucketOwner,config.project_id);}
+});
+test('AWS object transport never gives audit or unknown release paths immutable cache permission',async()=>{
+    const keys=['audit/101-1/intent.json','audit/commissioning/'+'b'.repeat(64)+'.json','releases/'+'a'.repeat(64)+'/patient.json','releases/'+'A'.repeat(64)+'/index.html','releases/'+'a'.repeat(63)+'/index.html','releases/'+'a'.repeat(64)+'/../index.html'],calls=[];
+    const client=awsClient({run:(_command,args)=>{calls.push(JSON.parse(args[args.indexOf('--cli-input-json')+1]));return {status:0,stdout:'{}'};}});
+    for(const key of keys)await client.put(config.audit_bucket,key,Buffer.from('{}'));
+    assert.deepEqual(calls.map(c=>c.Key),keys);assert.ok(calls.every(c=>c.CacheControl==='no-store'&&c.IfNoneMatch==='*'));
+});
