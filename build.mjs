@@ -9,7 +9,7 @@ export const ROOT = path.dirname(fileURLToPath(import.meta.url));
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export const SOURCE_FILES = ['AGENTS.md','.gitignore','package.json','package-lock.json','README.md','policy.mjs','content.mjs','edge.mjs',
     'build.mjs','verify.mjs','verify.test.mjs','commissioning.test.mjs','browser.mjs','serve.mjs','export.mjs','deploy.mjs','deploy.test.mjs','aws.mjs','infrastructure.mjs',
-    'deployment.example.json','security.guard','security.mjs','monitor.mjs','.github/workflows/nonclinical.yml','.github/workflows/monitor.yml',
+    'deployment.example.json','security.guard','security.mjs','monitor.mjs','monitor.test.mjs','.github/workflows/nonclinical.yml','.github/workflows/monitor.yml',
     'site/assets/site.css','site/assets/demo.js'];
 export async function readSource(root = ROOT) {
     const allowed=new Set(SOURCE_FILES);
