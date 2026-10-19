@@ -33,6 +33,7 @@ jobs:
         with:
           node-version: 24.20.0
       - run: npm ci --ignore-scripts
+      - run: node --test monitor.test.mjs
       - run: npx --no-install playwright install --with-deps chromium
       - name: Execute contracts and real desktop/mobile browser checks
         run: node verify.mjs "$RUNNER_TEMP/qualified"
