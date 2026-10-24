@@ -36,28 +36,40 @@ jobs:
       - run: npx --no-install playwright install --with-deps chromium
       - name: Execute contracts and real desktop/mobile browser checks
         run: node verify.mjs "$RUNNER_TEMP/qualified"
-      - name: Install isolated pinned validation tools
+      - name: Install isolated pinned AWS validation tools
+        if: github.event_name == 'workflow_dispatch' && inputs.mode != 'prepare'
         run: |
           python3 -m venv "$RUNNER_TEMP/validators"
           "$RUNNER_TEMP/validators/bin/pip" install --disable-pip-version-check cfn-lint==1.57.2
           curl --fail --silent --show-error --location --proto '=https' --output "$RUNNER_TEMP/guard.tar.gz" https://github.com/aws-cloudformation/cloudformation-guard/releases/download/3.2.1/cfn-guard-v3-x86_64-linux-latest.tar.gz
           printf '%s\n' "8c66efb19c63e6c2bf26b9a41bbcf2f85baa8a937b01d350940194faaf64cf1d  $RUNNER_TEMP/guard.tar.gz" | sha256sum --check -
           tar -xzf "$RUNNER_TEMP/guard.tar.gz" --directory "$RUNNER_TEMP/validators"
+      - name: Install checksum-pinned static scanner
+        run: |
+          mkdir -p "$RUNNER_TEMP/validators"
           curl --fail --silent --show-error --location --proto '=https' --output "$RUNNER_TEMP/gitleaks.tar.gz" https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
           printf '%s\n' "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check -
           tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" --directory "$RUNNER_TEMP/validators" gitleaks
-      - name: Validate infrastructure and scan the fresh export and public artifact
+      - name: Scan the fresh export, static artifact and Vercel output
         env:
+          AWS_RELEASE_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'prepare' }}
           CFN_LINT: ${{ runner.temp }}/validators/bin/cfn-lint
           CFN_GUARD: ${{ runner.temp }}/validators/cfn-guard-v3-x86_64-linux-latest/cfn-guard
           GITLEAKS: ${{ runner.temp }}/validators/gitleaks
-        run: node security.mjs "$RUNNER_TEMP/security" "$RUNNER_TEMP/qualified/candidate"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        run: |
+          if [ "$AWS_RELEASE_REQUESTED" = true ]; then
+            node security.mjs "$RUNNER_TEMP/security" "$RUNNER_TEMP/qualified/candidate"
+          else
+            node security.mjs --static-only "$RUNNER_TEMP/security" "$RUNNER_TEMP/qualified/candidate"
+          fi
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: nonclinical-${{ github.sha }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/qualified
             ${{ runner.temp }}/security
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
   publish:

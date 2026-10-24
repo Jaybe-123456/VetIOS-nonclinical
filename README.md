@@ -60,3 +60,12 @@ Remaining authorization: new repository ownership and source push, production pa
 Deployment config v2 adds nullable `publication_approval_sha256`; v1 configs are not accepted by this candidate. It stays null during preparation and suspension. For publish/rollback, supply an actual separate human record at audit/authorizations/<SHA256>.json with schema vetios-nonclinical-publication-approval-v1, status APPROVED, scope NONCLINICAL_STATIC_ONLY, environment vetios-nonclinical-production, project_id, region, repository_id, source_commit (the actual standalone main commit), source_sha256, artifact_sha256, mode (publish or rollback), approver_id (the actual environment approver), config_sha256 (canonical config excluding *_sha256 fields), issued_at and expires_at. The current main commit, reviewed artifact and commissioned environment must match. Financial instructions, security review, environment approval, a healthy fixture or bootstrap permission do not substitute for this written authorization. Do not generate executed records from test data.
 
 The founder recorded a proposed $25/month AWS ceiling and operating target below $15, with 50/80/100 percent alerts, covering dedicated S3, CloudFront, requests, monitoring/logging and retained versions. That instruction authorizes neither bootstrap execution nor publication. Before execution, verify account eligibility, actual prices, forecast assumptions, scope/retention, complete budget attribution and the actual change set. AWS budget alerts are delayed notifications and do not enforce a hard cap. Tag-only budgets must not silently omit Functions/KVS or other untagged charges. No additional paid service, plan upgrade or ceiling increase is authorized. Current pay-as-you-go configuration cannot guarantee a $25 maximum under unbounded traffic; the financial enforcement/acceptance decision remains blocking. The public GitHub monitor uses no paid AWS monitoring service; audit objects use existing dedicated S3. Recipient/notifications and actual budget readback remain mandatory.
+
+
+## Isolated Vercel candidate
+
+See [the Vercel release plan](VERCEL-RELEASE-PLAN.md) for the exact existing project,
+static qualification commands and remaining real owner evidence. PR qualification
+builds only static files and requires scanner/advisory checks. AWS template validators
+remain mandatory for an explicit AWS publish/suspend/rollback dispatch; they do not
+gate the separate Vercel candidate. This workflow performs no Vercel publication.
