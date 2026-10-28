@@ -1,71 +1,24 @@
-# VetIOS restricted non-clinical candidate
+# VetIOS public site
 
-Preparation only. No existing production release gate is changed. This directory is an explicit source export for a new independent repository, not another deployment path from Karshadev/VetIOS. Nested workflows are inert in the parent repository.
+Standalone static website, architecture documentation and a fixed synthetic evidence demonstration for VetIOS. It contains no patient inputs, clinical inference, accounts, databases or clinical APIs.
 
-Public scope: four static pages (website, curated architecture documentation, fixed synthetic laboratory-control evidence trace, release boundary), one stylesheet, one local demo script and public release metadata. No clinical application, accounts, user input, uploads, database, API, inference, autonomous action, learning, federation, analytics or provider credentials. No clinical services or existing clinical hostname are attached.
+## Verify locally
 
-Governance remains: independent reviewer approval NOT_ESTABLISHED; clinical governance approval NOT_ESTABLISHED; governed commissioning INCOMPLETE; clinical production release BLOCKED. Passing fixture tests do not establish clinical validity.
+Use Node 24.20.0 and the committed npm lockfile:
 
-## Reproduce the candidate
-
-Use Node 24.20.0 and npm with the committed lockfile:
-
-```
+```bash
 npm ci --ignore-scripts
-npx playwright install chromium
-npm audit --audit-level=low
-npm run verify -- /absolute/new/evidence-directory
-node export.mjs /absolute/new/standalone-source-directory
-node infrastructure.mjs /absolute/new/stack.json
-cfn-lint --template /absolute/new/stack.json
-cfn-guard validate --rules security.guard --data /absolute/new/stack.json
+npx --no-install playwright install chromium
+npm test
+node verify.mjs /absolute/new/evidence-directory
 ```
 
-`verify` executes adverse contracts, deterministic builds, exact artifact hashing, the actual edge guard in a qualification adapter, desktop/mobile browser checks and captures. Inspect screenshots and diagnostics. The local adapter does not prove deployed CloudFront propagation or AWS policy evaluation. Export excludes parent Git history and all unlisted files. Scan the fresh source and public artifact with the pinned Gitleaks tool before any independent repository push. Existing clinical history findings remain unresolved; do not copy that history or its credentials.
+Verification checks source and artifact integrity, deterministic builds, rejected routes, security headers and desktop/mobile browsers. The receipt records engineering results; publication requires separate operational authorization.
 
-## Deployment trust boundary
+## Release paths
 
-Proposed infrastructure: private, encrypted, versioned S3 in project 845081398643 / eu-north-1; fixed CloudFront REST/OAC origin; strict CSP; no API fallback; exact GET/HEAD route guard; separate digest-only release pointer. The publisher has no distribution, function, IAM, compute, secrets or clinical storage mutation rights. Its permissions boundary matches its resource-scoped identity policy. There is no runtime application IAM role; the AWS CLI publisher's explicit service operations determine infrastructure permissions. Guard never interprets a pointer as an origin or arbitrary path.
+- **Vercel:** static Build Output API packaging and qualification are implemented. See [Vercel release requirements](VERCEL-RELEASE-PLAN.md).
+- **AWS:** a separate S3/CloudFront publisher, suspension and rollback path are implemented. See [operations](OPERATIONS.md).
+- **Clinical:** clinical application releases retain their own security, evaluation and independent authorization gates in the clinical repository.
 
-**Do not deploy this template yet.** The default configuration is NOT_COMMISSIONED and intentionally cannot publish. Review a CloudFormation change set only after verifying selected Region/project, paid-plan/spend status, service support, absence of existing OIDC provider conflicts, unique resource ownership and clinical isolation. Use a lowercase stack name of at most 20 characters, such as public-20261016, to keep generated resource names within their limits. Regional resources must stay in Stockholm; CloudFront is global. No Lambda@Edge, cross-Region replication, StackSets or governed runner.
-
-Bootstrap requires separate explicit human authorization for resources, cost and **30-day GOVERNANCE Object Lock** on audit storage. This replaces the earlier undeployed COMPLIANCE proposal; the revised template must be rehashed, reverified and reviewed before bootstrap. The publisher is explicitly denied object deletion, retention changes and governance bypass in both its identity policy and boundary. An authorized administrator can bypass GOVERNANCE retention; doing so requires separate human authorization and an audit record. No clinical retention control changes. Costs include S3 storage/requests, CDN requests/transfer and KVS operations: https://aws.amazon.com/cloudfront/pricing/ and https://aws.amazon.com/s3/pricing/. No resources are created by verification. An authorized bootstrap operator must commission resource policies, IAM/OIDC/boundary, main protection, required checks, native deployment environment approval, read-only GitHub security metadata access and monitoring notifications; read back actual settings. AWS validates policies and a service-aware change set before execution; local lint/Guard are not that validation.
-
-Configure a fresh repository with OIDC subject `repository_id:<NUMERIC_ID>:environment:vetios-nonclinical-production`, custom subject keys `["repository_id","context"]`, main-only environment, required named human reviewers and no administrator bypass. IAM subject customization must be verified live, including current GitHub immutable-subject behavior. Failure to match must block authentication. GitHub-hosted jobs only. Protect main with required `qualify`, administrator enforcement and disabled force pushes/deletions; protect all workflow/config files. The founder may provide the actual non-clinical human authorization and record self-review; this never establishes independent clinical approval. Do not reuse clinical credentials, repository history, data, domains, providers or runner. A founder's non-clinical approval does not establish independent clinical review.
-
-Keep the actual deployment configuration outside the closed source export: store it in the protected environment variable NONCLINICAL_DEPLOYMENT_CONFIG; the workflow writes it to RUNNER_TEMP/deployment.json. This avoids a circular hash between executed approval records and source. Never add deployment.json to the source directory. Populate actual commissioned resource identities and explicit human IDs; record the approved security review, bootstrap readback and public content/privacy/contact review as immutable audit/commissioning/<SHA256>.json objects. Records use schema vetios-nonclinical-commissioning-v1, kind equal to the config's corresponding *_sha256 field, scope NONCLINICAL_STATIC_ONLY, status APPROVED, config_sha256 (canonical config excluding *_sha256 fields), source_sha256, approver_id and expires_at. Bootstrap also binds canonical actual AWS distribution_config_sha256, headers_config_sha256 cache_config_sha256, content_policy_sha256 and audit_policy_sha256. These must be executed human records; no fixture values or locally generated approval substitutes. Deploy code rejects missing/stale records, foreign project, source changes, unknown config fields or absent current human environment authorization.
-
-The content/privacy record additionally requires a closed `content_review` object with schema `vetios-nonclinical-content-review-v2`: an actual HUMAN_OWNER decision, the confirmed public operator identity, inbox administrator and role, an owner-attested active inbox tested within 30 days, accepted named incident ownership matching `monitoring_owner`, the reviewed operational notification address, a completed delivery/alert-routing test within 30 days, response availability, email provider and retention disposition, AWS global-delivery/provider-metadata disposition, and the exact artifact and boundary-page hashes. See `validateContentPrivacyReview` for the closed field names. Human attestations remain assertions by accountable people; software checks cannot independently establish mailbox control or legal authority. A proposed responsibility assignment, AI assessment, selected address, budget subscriber or passing authored test is not accepted ownership or human review. No automatic fallback routes incidents to the personal budget-alert address.
-
-`PUBLIC_OPERATOR_NAME` is intentionally null. This source rejects publication while that identity remains unresolved, even if all provider readbacks otherwise compose. A legitimate operator may be an identified individual; do not invent a legal entity. Confirmed public facts require a new source revision, artifact and review. This candidate discloses global CDN delivery and provider metadata, distinguishes the email channel and promises no universal provider deletion period. It proposes no viewer access logs or analytics; preflight rejects legacy viewer logging and realtime-log attachments. Standard logging v2 is configured separately from DistributionConfig: the human infrastructure/privacy review must inspect actual provider delivery settings too. These checks alone do not establish their absence. This revision creates no executed approval record, changes no existing record and grants no deployment authority.
-
-The manual workflow first qualifies source and prints the artifact digest. A human must explicitly provide that digest and request publication after reviewing the candidate. Publication repeats qualification on the same main commit, requires environment approval and live readback, uploads only conditional immutable objects, writes audit intent, conditionally changes one KVS key once, and checks actual HTTP bodies, headers and denied APIs. A timeout or failed audit/health result is not success. Pointer updates are never blindly retried. Expected propagation delays can produce UNKNOWN; inspect live state before a newly approved attempt.
-
-## Monitoring, rollback and remaining commissioning
-
-Scheduled monitoring is read-only HTTPS, has no AWS credentials and fails on changed content/headers, unavailable pages or accessible restricted endpoints. Commission a named notification recipient, retention/contact/privacy language and incident ownership before publication. GitHub logs and immutable deployment intents/outcomes provide audit evidence. Provider operational metadata processing must be accepted; no access-log/analytics collection is silently enabled.
-
-The public contact selected by the owner is platform@vetios.tech. Selecting that address does not approve the complete privacy disclosure, operational metadata processing or a publication. Those records remain required.
-
-Required human environment review must actually be enforceable on the hosting plan. GitHub Free, Pro and Team provide required environment reviewers only for public repositories. A private repository on those plans cannot commission this pipeline. An independently approved public-source disclosure or an authorized Enterprise arrangement is required; a manual dispatch, comment, invented approval receipt or administrator bypass is not a substitute. Do not change repository visibility or purchase a plan as part of a verification run.
-
-Only exact digest-prefixed release members receive `public, max-age=31536000, immutable` on their private S3 objects. Audit objects and unknown members retain `no-store`. The fixed CloudFront response policy overrides viewer `Cache-Control` to `no-store`, independently of the CDN object cache. A viewer request still passes the allowlist and active-digest lookup; browsers cannot keep an older active release. Minimum/default TTL remain zero, with no session, cookie or query forwarding. This reduces repeat origin work but does not enforce a spending cap. Actual propagation, suspension, cache-hit cost and recovery behavior require the authorized AWS rehearsal.
-
-There is no earlier healthy baseline on the first release. Use the protected `suspend` mode to conditionally set activeRelease to SUSPENDED and require every allowed route to return 503 while forbidden APIs remain 403. Suspension uploads no public content, requires commissioned controls and human environment approval, and cannot alter an origin or delete history. It does not require publication approval because it only removes availability. Suspension does not stop CloudFront request charges. A timeout/propagation delay records UNKNOWN with no automatic retry. Observe read-only, preserve the UNKNOWN receipt, then use a new human-approved attempt. Recovery into public content requires the separate written publication approval below. Subsequent rollback also requires an earlier immutable artifact and OBSERVED_HEALTHY audit receipt; no earlier baseline is invented. Retain the exact earlier qualified source and commissioning records. Rollback code/config compatibility and propagation must be rehearsed against the isolated AWS infrastructure before first publication. Rehearse initial suspension, denied APIs, failed audit, propagation delay and ambiguous-response recovery before first publication. Local HTTP/provider fixtures establish mechanics only; actual isolated AWS rehearsal remains required after bootstrap authorization.
-
-Remaining authorization: new repository ownership and source push, production pathway approval independent of the original global gate, actual security dispositions for this export, commissioned IAM/environment/branch protections, paid plan/cost/retention approval, approved public content/privacy/contact, monitored delivery/rollback rehearsal and a separate explicit production deployment authorization. No website is called production-ready from this candidate receipt.
-
-## Written publication authorization and financial boundary
-
-Deployment config v2 adds nullable `publication_approval_sha256`; v1 configs are not accepted by this candidate. It stays null during preparation and suspension. For publish/rollback, supply an actual separate human record at audit/authorizations/<SHA256>.json with schema vetios-nonclinical-publication-approval-v1, status APPROVED, scope NONCLINICAL_STATIC_ONLY, environment vetios-nonclinical-production, project_id, region, repository_id, source_commit (the actual standalone main commit), source_sha256, artifact_sha256, mode (publish or rollback), approver_id (the actual environment approver), config_sha256 (canonical config excluding *_sha256 fields), issued_at and expires_at. The current main commit, reviewed artifact and commissioned environment must match. Financial instructions, security review, environment approval, a healthy fixture or bootstrap permission do not substitute for this written authorization. Do not generate executed records from test data.
-
-The founder recorded a proposed $25/month AWS ceiling and operating target below $15, with 50/80/100 percent alerts, covering dedicated S3, CloudFront, requests, monitoring/logging and retained versions. That instruction authorizes neither bootstrap execution nor publication. Before execution, verify account eligibility, actual prices, forecast assumptions, scope/retention, complete budget attribution and the actual change set. AWS budget alerts are delayed notifications and do not enforce a hard cap. Tag-only budgets must not silently omit Functions/KVS or other untagged charges. No additional paid service, plan upgrade or ceiling increase is authorized. Current pay-as-you-go configuration cannot guarantee a $25 maximum under unbounded traffic; the financial enforcement/acceptance decision remains blocking. The public GitHub monitor uses no paid AWS monitoring service; audit objects use existing dedicated S3. Recipient/notifications and actual budget readback remain mandatory.
-
-
-## Isolated Vercel candidate
-
-See [the Vercel release plan](VERCEL-RELEASE-PLAN.md) for the exact existing project,
-static qualification commands and remaining real owner evidence. PR qualification
-builds only static files and requires scanner/advisory checks. AWS template validators
-remain mandatory for an explicit AWS publish/suspend/rollback dispatch; they do not
-gate the separate Vercel candidate. This workflow performs no Vercel publication.
+The designated public operator is John Bruce. Mailbox delivery, incident routing and provider commissioning still require real records. This candidate is not commissioned for publication.

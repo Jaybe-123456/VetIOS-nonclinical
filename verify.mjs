@@ -11,7 +11,7 @@ import { canonical,GOVERNANCE } from './policy.mjs';
 export async function verify(output) {
     const source=await readSource();await fs.mkdir(output,{recursive:false,mode:0o700});
     const log=await fs.open(path.join(output,'contracts.tap'),'wx',0o600);let result;
-    try{result=spawnSync(process.execPath,['--test','--test-isolation=none','--test-reporter=tap','verify.test.mjs','deploy.test.mjs','commissioning.test.mjs','vercel.test.mjs'],{cwd:ROOT,stdio:['ignore',log.fd,log.fd],timeout:120000});}finally{await log.close();}
+    try{result=spawnSync(process.execPath,['--test','--test-isolation=none','--test-reporter=tap','verify.test.mjs','deploy.test.mjs','commissioning.test.mjs','vercel.test.mjs','monitor.test.mjs'],{cwd:ROOT,stdio:['ignore',log.fd,log.fd],timeout:120000});}finally{await log.close();}
     const tap=await fs.readFile(path.join(output,'contracts.tap'),'utf8');
     const tests=Number(tap.match(/^# tests (\d+)$/m)?.[1]),passed=Number(tap.match(/^# pass (\d+)$/m)?.[1]);
     assert.equal(result.status,0,'inspect contracts.tap');assert.ok(tests>=161&&passed===tests,'complete executed negative checks required');assert.match(tap,/^# fail 0$/m);assert.match(tap,/^# skipped 0$/m);

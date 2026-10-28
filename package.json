@@ -9,7 +9,7 @@
   "scripts": {
     "verify": "node verify.mjs",
     "build": "node build.mjs",
-    "test": "node --test --test-isolation=none --test-reporter=tap verify.test.mjs deploy.test.mjs commissioning.test.mjs vercel.test.mjs",
+    "test": "node --test --test-isolation=none --test-reporter=tap verify.test.mjs deploy.test.mjs commissioning.test.mjs vercel.test.mjs monitor.test.mjs",
     "verify:vercel": "node verify.mjs",
     "security:vercel": "node security.mjs --static-only"
   },

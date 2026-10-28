@@ -13,6 +13,7 @@ jobs:
     env:
       NONCLINICAL_MONITOR_DOMAIN: ${{ vars.NONCLINICAL_MONITOR_DOMAIN }}
       NONCLINICAL_MONITOR_MANIFEST: ${{ vars.NONCLINICAL_MONITOR_MANIFEST }}
+      NONCLINICAL_MONITOR_MANIFEST_SHA256: ${{ vars.NONCLINICAL_MONITOR_MANIFEST_SHA256 }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -20,4 +21,5 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: 24.20.0
-      - run: node monitor.mjs
+      - name: Report commissioning state and probe the commissioned artifact
+        run: node monitor.mjs
