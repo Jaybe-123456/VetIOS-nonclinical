@@ -3,7 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": "24.x" },
-  "scripts": { "verify": "node verify.mjs", "build": "node build.mjs", "test": "node --test --test-isolation=none --test-reporter=tap verify.test.mjs deploy.test.mjs commissioning.test.mjs" },
-  "devDependencies": { "playwright": "1.63.0" }
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "verify": "node verify.mjs",
+    "build": "node build.mjs",
+    "test": "node --test --test-isolation=none --test-reporter=tap verify.test.mjs deploy.test.mjs commissioning.test.mjs vercel.test.mjs monitor.test.mjs",
+    "verify:vercel": "node verify.mjs",
+    "security:vercel": "node security.mjs --static-only"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
 }

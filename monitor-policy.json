@@ -1,0 +1,6 @@
+{
+  "schema": "vetios-nonclinical-monitor-policy-v1",
+  "state": "NOT_COMMISSIONED",
+  "provider": null,
+  "domain": null
+}

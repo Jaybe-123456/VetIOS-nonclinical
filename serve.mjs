@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import vm from 'node:vm';
 import { edgeCode } from './edge.mjs';
+import { routeConfig } from './vercel.mjs';
 import { HEADERS } from './policy.mjs';
 export const CONTENT_TYPES={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json; charset=utf-8'};
 export function edgeHandler(pointer) {
@@ -11,12 +12,16 @@ export function edgeHandler(pointer) {
     vm.runInContext(edgeCode().slice(edgeCode().indexOf('\n')+1),context,{timeout:1000});
     return request=>context.handler({request});
 }
-export async function startServer(directory,artifact,{pointer=artifact.artifact_sha256}={}) {
+export async function startServer(directory,artifact,{pointer=artifact.artifact_sha256,routeProvider='aws'}={}) {
     const guard=edgeHandler(pointer);
     const server=http.createServer(async(req,res)=>{
         try {
             const parsed=new URL(req.url,'http://127.0.0.1');
-            const result=await guard({method:req.method,uri:parsed.pathname,headers:Object.fromEntries(Object.entries(req.headers).map(([k,v])=>[k,{value:String(v)}])),querystring:{},cookies:{}});
+            let result;
+            if(routeProvider==='vercel'){
+                const route=routeConfig().routes.find(r=>!r.continue && new RegExp(r.src,r.caseSensitive?'':'i').test(parsed.pathname) && (!r.methods||r.methods.includes(req.method)));
+                result=route.status?{statusCode:route.status,headers:Object.fromEntries(Object.entries(HEADERS).map(([k,v])=>[k,{value:v}]))}:{uri:'/releases/'+artifact.artifact_sha256+route.dest};
+            }else result=await guard({method:req.method,uri:parsed.pathname,headers:Object.fromEntries(Object.entries(req.headers).map(([k,v])=>[k,{value:String(v)}])),querystring:{},cookies:{}});
             if(result.statusCode){res.writeHead(result.statusCode,Object.fromEntries(Object.entries(result.headers).map(([k,v])=>[k,v.value])));res.end();return;}
             const name=result.uri.slice(('/releases/'+artifact.artifact_sha256+'/').length);
             const member=artifact.members.find(m=>m.path===name);if(!member)throw Error('not_in_manifest');

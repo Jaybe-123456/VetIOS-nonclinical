@@ -9,6 +9,8 @@ workflow templates must never become workflows in the clinical repository.
 Keep clinical production BLOCKED, independent reviewer approval NOT_ESTABLISHED,
 clinical governance approval NOT_ESTABLISHED and governed commissioning INCOMPLETE.
 Non-clinical publication requires its own actual human authorization and scoped
-commissioned AWS identities. Tests and demonstration hashes do not grant authority.
-Run the standalone verifier, actual browser checks and applicable parent verifier.
+commissioned identities for the selected hosting provider. Tests and demonstration hashes do not grant authority.
+Run the standalone verifier, actual browser checks and static security qualification.
+This separate repository never imports the parent clinical app or its release gate.
+AWS deployment controls remain applicable only to the separate AWS target.
 Never rewrite a receipt or weaken a guard to get a green result.
