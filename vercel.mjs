@@ -52,7 +52,7 @@ async function loadVerificationEvidence(directory, source, artifact) {
     const tapText = tap.toString('utf8');
     const tests = Number(tapText.match(/^# tests (\d+)$/m)?.[1]);
     const passed = Number(tapText.match(/^# pass (\d+)$/m)?.[1]);
-    assert.ok(Number.isSafeInteger(tests) && tests >= 161, 'complete executed adverse contracts required');
+    assert.ok(Number.isSafeInteger(tests) && tests >= 241, 'complete executed adverse contracts required');
     assert.equal(passed, tests); assert.match(tapText, /^# fail 0$/m); assert.match(tapText, /^# skipped 0$/m);
     assert.match(tapText, /^# cancelled 0$/m); assert.match(tapText, /^# todo 0$/m);
     assert.doesNotMatch(tapText, /^not ok /m);

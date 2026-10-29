@@ -10,7 +10,8 @@ export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export const SOURCE_FILES = ['AGENTS.md','.gitignore','package.json','package-lock.json','README.md','VERCEL-RELEASE-PLAN.md','vercel.mjs','vercel.test.mjs','policy.mjs','content.mjs','edge.mjs',
     'build.mjs','verify.mjs','verify.test.mjs','commissioning.test.mjs','browser.mjs','serve.mjs','export.mjs','deploy.mjs','deploy.test.mjs','aws.mjs','infrastructure.mjs',
     'deployment.example.json','security.guard','security.mjs','monitor.mjs','monitor.test.mjs','monitor-policy.json','OPERATIONS.md','.github/workflows/nonclinical.yml','.github/workflows/monitor.yml',
-    'site/assets/site.css','site/assets/demo.js'];
+    'site/assets/site.css','site/assets/demo.js', 'commissioning-intake.mjs', 'vercel-release-policy.mjs', 'vercel-release.mjs',
+    'vercel-provider.mjs', 'vercel-release.test.mjs', '.github/workflows/vercel-publish.yml', 'VERCEL-OPERATIONS.md'];
 export async function readSource(root = ROOT) {
     const allowed=new Set(SOURCE_FILES);
     async function walk(dir,prefix='') {

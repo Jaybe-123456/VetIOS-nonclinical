@@ -7,6 +7,8 @@ import { build, ROOT, sha256 } from './build.mjs';
 import { canonical, ROUTES, HEADERS } from './policy.mjs';
 import { startServer } from './serve.mjs';
 import { buildVercelOutput, inspectVercelOutput, routeConfig } from './vercel.mjs';
+import { vercelProvider } from './vercel-provider.mjs';
+import { TARGET } from './vercel-release-policy.mjs';
 
 async function fixture(fn) {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vetios-vercel-output-'));
@@ -15,7 +17,7 @@ async function fixture(fn) {
         const verificationDirectory = path.join(root, 'verification');
         const outputRoot = path.join(root, '.vercel', 'output');
         await fs.mkdir(verificationDirectory, { mode: 0o700 });
-        const count = 161;
+        const count = 241;
         const tap = `TAP version 13\n1..${count}\n# tests ${count}\n# pass ${count}\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n`;
         await fs.writeFile(path.join(verificationDirectory, 'contracts.tap'), tap, { mode: 0o600 });
         const captures = [];
@@ -81,6 +83,37 @@ test('stale output cannot be overwritten or rebuilt in place', () => fixture(asy
     await assert.rejects(() => buildVercelOutput(f));
 }));
 
+test('provider adapter uploads only the inspected eight prebuilt members once without production aliasing', () => fixture(async f => {
+    const directory = path.join(f.root, 'delivery'), qualified = path.join(directory, 'qualified');
+    await fs.cp(f.verificationDirectory, qualified, { recursive: true });
+    await fs.cp(f.artifactDirectory, path.join(qualified, 'candidate'), { recursive: true });
+    const outputRoot = path.join(qualified, 'vercel/.vercel/output');
+    const output = await buildVercelOutput({ artifactDirectory: path.join(qualified, 'candidate'), verificationDirectory: qualified, outputRoot });
+    let creates = 0;
+    const request = async (url, options) => {
+        const u = new URL(url); assert.equal(u.origin, 'https://api.vercel.com'); assert.equal(u.searchParams.get('teamId'), TARGET.team);
+        assert.equal(options.redirect, 'error');
+        if (options.method === 'POST') {
+            creates++; assert.equal(u.pathname, '/v13/deployments'); assert.equal(u.searchParams.get('prebuilt'), '1');
+            const body = JSON.parse(options.body); assert.equal(body.project, TARGET.project); assert.equal(body.target, 'production');
+            assert.equal(body.autoAssignCustomDomains, false); assert.equal(body.files.length, 8);
+            assert.equal(body.env, undefined); assert.equal(body.build, undefined); assert.equal(body.gitSource, undefined);
+            for (const member of body.files) {
+                assert.ok(member.file.startsWith('.vercel/output/')); assert.equal(member.encoding, 'base64');
+                assert.equal(member.mode, 0o100644);
+                const local = await fs.readFile(path.join(outputRoot, member.file.slice('.vercel/output/'.length)));
+                assert.deepEqual(Buffer.from(member.data, 'base64'), local);
+            }
+            return Response.json({ id: 'dpl_synthetic123', projectId: TARGET.project, url: 'vetios-public-static-synthetic.vercel.app' });
+        }
+        assert.equal(u.pathname, '/v13/deployments/dpl_synthetic123'); return Response.json({ readyState: 'READY' });
+    };
+    const provider = vercelProvider({ directory, env: { VERCEL_TOKEN: 'synthetic-test-only' }, request });
+    assert.equal(await provider.stage(output), 'dpl_synthetic123'); assert.equal(creates, 1);
+    await fs.appendFile(path.join(outputRoot, 'static/index.html'), 'changed');
+    await assert.rejects(() => provider.stage(output)); assert.equal(creates, 1, 'changed bytes never reach provider');
+}));
+
 test('function, cron, proxy, middleware and arbitrary config primitives fail closed', () => fixture(async f => {
     await buildVercelOutput(f);
     for (const key of ['functions', 'crons', 'services', 'daemons', 'middlewarePath', 'rewrites', 'images']) {
@@ -138,7 +171,7 @@ async function sealFixture(directory, artifact) {
     const browser=JSON.parse(browserBytes);
     const captures=[];
     for(const name of browser.captures) captures.push({path:name,sha256:sha256(await fs.readFile(path.join(directory,name)))});
-    const receipt={schema:'vetios-nonclinical-verification-v1',status:'PASS',tests:161,passed:161,failed:0,skipped:0,
+    const receipt={schema:'vetios-nonclinical-verification-v1',status:'PASS',tests:241,passed:241,failed:0,skipped:0,
         source_sha256:artifact.source_sha256,artifact_sha256:artifact.artifact_sha256,
         tests_sha256:sha256(tap),browser_sha256:sha256(browserBytes),browser,captures,production_authorized:false,production_actions:0};
     receipt.receipt_sha256=sha256(canonical(receipt));
