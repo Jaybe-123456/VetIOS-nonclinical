@@ -42,6 +42,8 @@ export function inspectPrior(raw, expectedDigest, mode, expectedArtifact) {
     assert.equal(receipt.clinical_release_authorized, false);
     assert.ok(receipt.authorization.approver_id, 'prior human approval absent');
     assert.ok(['STAGED_VERIFIED', 'PUBLISHED_VERIFIED'].includes(receipt.status), 'unknown, failed or suspended outcome is not a recovery baseline');
+    if (receipt.status === 'PUBLISHED_VERIFIED') assert.match(receipt.commissioning_packet_sha256, shaPattern, 'published receipt must identify the checked operational packet');
+    else assert.equal(receipt.commissioning_packet_sha256, null);
     if (mode === 'promote') assert.equal(receipt.status, 'STAGED_VERIFIED');
     if (mode === 'rollback') assert.equal(receipt.status, 'PUBLISHED_VERIFIED', 'rollback requires a real earlier healthy publication');
     for (const key of ['source_sha256', 'artifact_sha256', 'vercel_output_sha256', 'verification_sha256', 'security_sha256']) assert.match(receipt.candidate[key], shaPattern);
@@ -97,7 +99,14 @@ export async function deliver({ input, authorize, candidate, prior, provider, au
     releaseInputs(input);
     if (input.mode === 'stage') assert.equal(prior, undefined, 'stage cannot consume a prior release');
     const authorization = await authorize(); assert.ok(authorization.approver_id);
-    if (['promote', 'rollback'].includes(input.mode)) await commissioning();
+    let commissioningDigest = null;
+    if (['promote', 'rollback'].includes(input.mode)) {
+        const intake = await commissioning();
+        assert.equal(intake?.schema, 'vetios-nonclinical-intake-v1');
+        assert.equal(intake.status, 'IMPORTED_UNAPPROVED');
+        assert.equal(intake.operational_truth_verified, false); assert.equal(intake.production_authorized, false);
+        assert.match(intake.packet_sha256, shaPattern); commissioningDigest = intake.packet_sha256;
+    }
     assert.equal(candidate.artifact_sha256, input.artifact_sha256);
     if (input.mode !== 'stage') {
         assert.ok(prior); assert.equal(prior.candidate.artifact_sha256, candidate.artifact_sha256);
@@ -113,7 +122,7 @@ export async function deliver({ input, authorize, candidate, prior, provider, au
     }
     // Exclusive local journal is uploaded by the workflow even after failure. Never silently retry a mutation.
     const common = { schema: 'vetios-vercel-release-v1', target: TARGET, authorization, mode: input.mode,
-        candidate, prior_receipt_sha256: input.receipt_sha256 || null, clinical_release_authorized: false };
+        candidate, prior_receipt_sha256: input.receipt_sha256 || null, commissioning_packet_sha256: commissioningDigest, clinical_release_authorized: false };
     await audit('intent.json', { ...common, status: 'INTENT_RECORDED', deployment });
     let attempted = false;
     try {

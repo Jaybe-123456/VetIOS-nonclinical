@@ -52,6 +52,9 @@ dispatch input, command argument, receipt or repository file.
 
 The receipt binds the commit, source, artifact, verification, security and output
 digests to the actual deployment ID. Preserve its exact bytes and SHA-256. The
+publication intent and outcome also retain the checked commissioning packet digest;
+the private packet itself is never included in an uploaded release receipt. This
+reference does not turn metadata validation into proof of provider events. The
 workflow downloads later receipts from their original successful workflow runs;
 it does not accept an arbitrary URL, local replacement or preview deployment.
 

@@ -107,11 +107,12 @@ function deliveryFixture(mode = 'stage') {
     const calls = [], records = new Map(), authorization = { source_commit: C, run_id: '1234', attempt: 1, approver_id: 2 };
     let staged = mode === 'stage' || mode === 'promote';
     const prior = { schema: 'vetios-vercel-release-v1', target: TARGET, authorization, candidate, deployment, clinical_release_authorized: false,
+        commissioning_packet_sha256: mode === 'rollback' ? H : null,
         status: mode === 'rollback' ? 'PUBLISHED_VERIFIED' : 'STAGED_VERIFIED' };
     const input = { mode, artifact_sha256: candidate.artifact_sha256, prior_run: mode === 'stage' ? '' : '1234',
         receipt_sha256: mode === 'stage' ? '' : sha256(canonical(prior)), public_access: ['promote', 'rollback'].includes(mode) ? TARGET.domain : '' };
     return { calls, records, input, prior: mode === 'stage' ? undefined : prior, candidate, authorize: async () => { calls.push('authorize'); return authorization; },
-        commissioning: async () => { calls.push('commissioning'); }, monitorReady: async () => { calls.push('monitor'); },
+        commissioning: async () => { calls.push('commissioning'); return inspectCommissioning(canonical(packet()), { now: NOW }); }, monitorReady: async () => { calls.push('monitor'); },
         audit: async (name, value) => { assert.ok(!records.has(name)); records.set(name, value); calls.push(name); },
         provider: { project: async () => project(), deployment: async () => observed(staged), stage: async () => { calls.push('stage'); return deployment.id; },
             probe: async (_, a, protectedProbe) => { assert.equal(a.artifact_sha256, candidate.artifact_sha256); calls.push(protectedProbe ? 'protected-probe' : 'public-probe'); },
@@ -151,6 +152,25 @@ for (const failure of ['authorize', 'intent', 'stage', 'probe', 'outcome']) {
 test('missing operational records block publication before provider mutation', async () => {
     const f = deliveryFixture('promote'); f.commissioning = () => { throw Error('real records missing'); };
     await assert.rejects(() => deliver(f)); assert.equal(f.calls.includes('promote'), false);
+});
+test('publication journals bind the checked private packet without publishing its content or granting intake authority', async () => {
+    for (const mode of ['promote', 'rollback']) {
+        const f = deliveryFixture(mode); const result = await deliver(f);
+        const expected = sha256(canonical(packet()));
+        assert.equal(result.commissioning_packet_sha256, expected);
+        assert.equal(f.records.get('intent.json').commissioning_packet_sha256, expected);
+        assert.equal(f.records.get('outcome.json').commissioning_packet_sha256, expected);
+        assert.equal(JSON.stringify(result).includes('platform@vetios.tech'), false);
+        const missing = { ...result }; delete missing.commissioning_packet_sha256;
+        assert.throws(() => inspectPrior(canonical(missing), sha256(canonical(missing)), 'rollback', candidate.artifact_sha256));
+    }
+});
+test('a missing or self-authorizing intake result fails before any provider mutation', async () => {
+    for (const intake of [undefined, {}, { ...inspectCommissioning(canonical(packet()), { now: NOW }), production_authorized: true }]) {
+        const f = deliveryFixture('promote'); f.commissioning = async () => intake;
+        await assert.rejects(() => deliver(f));
+        assert.equal(f.calls.includes('promote'), false); assert.equal(f.records.size, 0);
+    }
 });
 test('promotion rejects stale source and absent public-access decision before provider mutation', async () => {
     const f = deliveryFixture('promote'); f.prior.authorization = { ...f.prior.authorization, source_commit: 'b'.repeat(40) };

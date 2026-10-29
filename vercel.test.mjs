@@ -17,7 +17,7 @@ async function fixture(fn) {
         const verificationDirectory = path.join(root, 'verification');
         const outputRoot = path.join(root, '.vercel', 'output');
         await fs.mkdir(verificationDirectory, { mode: 0o700 });
-        const count = 241;
+        const count = 243;
         const tap = `TAP version 13\n1..${count}\n# tests ${count}\n# pass ${count}\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n`;
         await fs.writeFile(path.join(verificationDirectory, 'contracts.tap'), tap, { mode: 0o600 });
         const captures = [];
@@ -171,7 +171,7 @@ async function sealFixture(directory, artifact) {
     const browser=JSON.parse(browserBytes);
     const captures=[];
     for(const name of browser.captures) captures.push({path:name,sha256:sha256(await fs.readFile(path.join(directory,name)))});
-    const receipt={schema:'vetios-nonclinical-verification-v1',status:'PASS',tests:241,passed:241,failed:0,skipped:0,
+    const receipt={schema:'vetios-nonclinical-verification-v1',status:'PASS',tests:243,passed:243,failed:0,skipped:0,
         source_sha256:artifact.source_sha256,artifact_sha256:artifact.artifact_sha256,
         tests_sha256:sha256(tap),browser_sha256:sha256(browserBytes),browser,captures,production_authorized:false,production_actions:0};
     receipt.receipt_sha256=sha256(canonical(receipt));
