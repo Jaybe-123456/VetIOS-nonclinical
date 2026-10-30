@@ -1,0 +1,125 @@
+name: Protected Vercel static delivery
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Stage never promotes; every later action requires a new approval
+        type: choice
+        options: [stage, promote, suspend, rollback]
+        default: stage
+        required: true
+      artifact_sha256:
+        description: Exact qualified static artifact reviewed for this action
+        type: string
+        required: true
+      prior_run:
+        description: Previous successful publisher run ID (empty for stage)
+        type: string
+      receipt_sha256:
+        description: SHA-256 of that run's outcome.json (empty for stage)
+        type: string
+      public_access:
+        description: Promote/rollback only - explicitly enter vetios-public-static.vercel.app
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: vetios-public-static-vercel
+  cancel-in-progress: false
+jobs:
+  preflight:
+    if: github.repository == 'Jaybe-123456/VetIOS-nonclinical' && github.repository_id == '1423681666' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.20.0
+      - name: Require reviewed source and protected environment before provider credentials
+        env:
+          GH_READ_TOKEN: ${{ secrets.NONCLINICAL_GITHUB_READ_TOKEN }}
+        run: node vercel-release.mjs preflight
+  prepare:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.20.0
+      - if: inputs.mode == 'stage'
+        run: |
+          npm ci --ignore-scripts
+          npx --no-install playwright install --with-deps chromium
+          node verify.mjs "$RUNNER_TEMP/qualified"
+      - name: Checksum-pinned scanner and independent static qualification
+        if: inputs.mode == 'stage'
+        env:
+          GITLEAKS: ${{ runner.temp }}/scanner/gitleaks
+        run: |
+          mkdir "$RUNNER_TEMP/scanner"
+          curl --fail --silent --show-error --location --proto '=https' --output "$RUNNER_TEMP/gitleaks.tar.gz" https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          printf '%s\n' "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" --directory "$RUNNER_TEMP/scanner" gitleaks
+          node security.mjs --static-only "$RUNNER_TEMP/security" "$RUNNER_TEMP/qualified/candidate"
+      - if: always() && inputs.mode == 'stage'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: vercel-qualified-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qualified
+            ${{ runner.temp }}/security
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+  deliver:
+    needs: [preflight, prepare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: vetios-public-static-vercel
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.20.0
+      - if: inputs.mode == 'stage'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: vercel-qualified-${{ github.run_id }}
+          path: ${{ runner.temp }}/delivery
+      - if: inputs.mode != 'stage'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: vercel-release-${{ inputs.prior_run }}
+          run-id: ${{ inputs.prior_run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/delivery
+      - name: Execute only the approved action and retain exact deployment identity
+        env:
+          GH_READ_TOKEN: ${{ secrets.NONCLINICAL_GITHUB_READ_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          NONCLINICAL_COMMISSIONING_PACKET: ${{ secrets.NONCLINICAL_COMMISSIONING_PACKET }}
+          NONCLINICAL_COMMISSIONING_SHA256: ${{ vars.NONCLINICAL_COMMISSIONING_SHA256 }}
+          NONCLINICAL_MONITOR_DOMAIN: ${{ vars.NONCLINICAL_MONITOR_DOMAIN }}
+          NONCLINICAL_MONITOR_MANIFEST: ${{ vars.NONCLINICAL_MONITOR_MANIFEST }}
+          NONCLINICAL_MONITOR_MANIFEST_SHA256: ${{ vars.NONCLINICAL_MONITOR_MANIFEST_SHA256 }}
+        run: node vercel-release.mjs deliver "$RUNNER_TEMP/delivery" "$RUNNER_TEMP/release-audit"
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: vercel-release-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-audit/*.json
+          if-no-files-found: warn
+          retention-days: 90
