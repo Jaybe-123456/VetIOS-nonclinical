@@ -77,9 +77,15 @@ export function inspectProject(project, domains, mode) {
     assert.equal(project.id, TARGET.project); assert.equal(project.accountId, TARGET.team); assert.equal(project.name, TARGET.name);
     assert.equal(project.framework, null); assert.equal(project.link ?? null, null, 'automatic Git deployment must not bypass the publisher');
     assert.equal(project.env?.length ?? 0, 0, 'static project must not inherit runtime credentials');
-    assert.ok(['all', 'all_except_custom_domains'].includes(project.ssoProtection?.deploymentType), 'preview SSO must remain enabled');
-    assert.ok(!project.passwordProtection && !project.trustedIps, 'unexpected additional access policy requires review');
-    assert.ok(Array.isArray(domains.domains) && domains.domains.every(d => d.name === TARGET.domain && d.verified === true));
+    assert.ok(project.ssoProtection?.enabled !== false && ['all', 'all_except_custom_domains'].includes(project.ssoProtection?.deploymentType), 'preview SSO must remain enabled');
+    for (const policy of [project.passwordProtection, project.trustedIps]) {
+        const explicitlyInactive = policy == null || (typeof policy === 'object' && !Array.isArray(policy)
+            && (policy.enabled ?? Boolean(policy.deploymentType)) === false && policy.deploymentType == null);
+        assert.ok(explicitlyInactive, 'unexpected additional access policy requires review');
+    }
+    assert.ok(Array.isArray(domains.domains) && domains.domains.length === 1
+        && domains.domains[0].name === TARGET.domain && domains.domains[0].verified === true,
+    'only the verified default hostname may be attached to this project');
     assert.ok(!domains.pagination?.next, 'domain inventory must be complete');
     if (['promote', 'rollback'].includes(mode)) {
         assert.equal(project.ssoProtection.deploymentType, 'all_except_custom_domains', 'public-access setting requires separate owner action');

@@ -45,12 +45,30 @@ Vercel behavior, access protection and rollback still require actual commissioni
 The Build Output API contract is documented at
 https://vercel.com/docs/build-output-api/configuration .
 
-Read-only integration observation on 24 October: project exists in the exact team
-above; no deployments; no custom routes; only the verified default hostname;
-Vercel Authentication enabled for `all_except_custom_domains`. The IDE CLI uses
-a different account, so use the authorized integration. Never recreate this project.
-Do not remove protection merely to make a probe pass. The owner must approve the
-intended anonymous production access while preview protection remains enforced.
+Read-only integration observation on 30 October 2026: the project exists in the
+exact team above, is not live, has no latest deployment or deployment records,
+and has no project environment variables. Vercel Authentication is enabled for
+`all_except_custom_domains`. The complete verified domain inventory currently
+contains both `vetios-public-static.vercel.app` and `public.vetios.tech`.
+
+The selected release target is the default hostname only. The `public.vetios.tech`
+association must be detached from this project before any stage or publication;
+under the current protection scope, custom production domains are public. There
+is no deployment now, so this finding does not establish a live-site outage. The
+connected Vercel integration available to this workflow has no project-domain
+detach operation. A Vercel team operator must remove the project association
+from the project's Domains tab using that domain's More Options → Delete action;
+this removes only the project association. Retain its team ownership, then
+re-read the complete project-domain inventory. Do not use `vercel domains remove`,
+which removes the domain from the team. The release preflight rejects any domain
+inventory other than the single verified default hostname. See Vercel's
+[project-domain removal instructions](https://vercel.com/docs/domains/working-with-domains/remove-a-domain).
+
+The IDE CLI uses a different account, so use the authorized integration or
+Vercel dashboard for this scoped setting. Never recreate this project. Keep
+preview protection enabled, and separately approve the intended anonymous
+production access before promotion. See Vercel's
+[Deployment Protection documentation](https://vercel.com/docs/deployment-protection).
 
 ## Owner evidence intake
 

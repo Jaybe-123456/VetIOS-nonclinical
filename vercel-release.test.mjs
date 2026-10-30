@@ -178,9 +178,24 @@ test('promotion rejects stale source and absent public-access decision before pr
     f.input.public_access = ''; assert.throws(() => releaseInputs(f.input));
 });
 test('foreign project, disabled SSO and unexpected runtime credentials block publication', () => {
-    for (const mutate of [p => { p.project.accountId = 'foreign'; }, p => { p.project.ssoProtection = null; }, p => { p.project.env = [{}]; }, p => { p.domains.domains.push({ name: 'clinical.vetios.tech', verified: true }); }]) {
+    for (const mutate of [p => { p.project.accountId = 'foreign'; }, p => { p.project.ssoProtection = null; },
+        p => { p.project.ssoProtection.enabled = false; }, p => { p.project.env = [{}]; },
+        p => { p.domains.domains.push({ name: 'clinical.vetios.tech', verified: true }); },
+        p => { p.domains.domains = []; }]) {
         const p = project(); mutate(p); assert.throws(() => inspectProject(p.project, p.domains, 'promote'));
     }
+});
+test('explicitly disabled optional Vercel protections are accepted while active or ambiguous ones fail closed', () => {
+    const p = project();
+    p.project.passwordProtection = { enabled: false, deploymentType: null };
+    p.project.trustedIps = { enabled: false, deploymentType: null, addresses: [] };
+    assert.doesNotThrow(() => inspectProject(p.project, p.domains, 'stage'));
+    p.project.passwordProtection = { enabled: true, deploymentType: 'all' };
+    assert.throws(() => inspectProject(p.project, p.domains, 'stage'));
+    p.project.passwordProtection = { enabled: false, deploymentType: 'all' };
+    assert.throws(() => inspectProject(p.project, p.domains, 'stage'));
+    p.project.passwordProtection = 'disabled';
+    assert.throws(() => inspectProject(p.project, p.domains, 'stage'));
 });
 test('preview deployments, changed metadata and premature alias assignment cannot be promoted as tested bytes', () => {
     for (const mutate of [d => { d.target = 'preview'; }, d => { d.meta.vetiosOutput = sha256('changed'); }, d => { d.assignedAliases = [TARGET.domain]; }, d => { d.url += '.evil.test'; }]) {
